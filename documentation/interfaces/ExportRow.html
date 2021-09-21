@@ -1,0 +1,343 @@
+<!doctype html>
+<html class="no-js" lang="">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title>ndb-core documentation</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link rel="icon" type="image/x-icon" href="../images/favicon.ico">
+	      <link rel="stylesheet" href="../styles/style.css">
+    </head>
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top visible-xs">
+            <a href="../" class="navbar-brand">ndb-core documentation</a>
+            <button type="button" class="btn btn-default btn-menu ion-ios-menu" id="btn-menu"></button>
+        </div>
+
+        <div class="xs-menu menu" id="mobile-menu">
+                <div id="book-search-input" role="search"><input type="text" placeholder="Type to search"></div>            <compodoc-menu></compodoc-menu>
+        </div>
+
+        <div class="container-fluid main">
+           <div class="row main">
+               <div class="hidden-xs menu">
+                   <compodoc-menu mode="normal"></compodoc-menu>
+               </div>
+               <!-- START CONTENT -->
+               <div class="content interface">
+                   <div class="content-data">
+
+
+
+
+
+
+
+
+
+
+
+
+<ol class="breadcrumb">
+  <li>Interfaces</li>
+  <li>ExportRow</li>
+</ol>
+
+<ul class="nav nav-tabs" role="tablist">
+        <li class="active">
+            <a href="#info" role="tab" id="info-tab" data-toggle="tab" data-link="info">Info</a>
+        </li>
+        <li >
+            <a href="#source" role="tab" id="source-tab" data-toggle="tab" data-link="source">Source</a>
+        </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade active in" id="c-info">
+        <p class="comment">
+            <h3>File</h3>
+        </p>
+        <p class="comment">
+            <code>src/app/core/export/export-service/export.service.ts</code>
+        </p>
+
+
+
+
+
+            <section>
+    <h3 id="inputs">Indexable</h3>
+        <table class="table table-sm table-bordered">
+            <tbody>
+                <tr>
+                    <td class="col-md-4">
+                        <code>[key: string]:        <code><a href="https://www.typescriptlang.org/docs/handbook/basic-types.html" target="_blank" >any</a></code>
+</code>
+                    </td>
+                </tr>
+                        <tr>
+                            <td class="col-md-4">
+                                <div class="io-line">Defined in <a href="" data-line="188" class="link-to-prism">src/app/core/export/export-service/export.service.ts:188</a></div>
+                            </td>
+                        </tr>
+            </tbody>
+        </table>
+</section>
+
+    </div>
+
+
+    <div class="tab-pane fade  tab-source-code" id="c-source">
+        <pre class="line-numbers compodoc-sourcecode"><code class="language-typescript">import { Injectable } from &quot;@angular/core&quot;;
+import { Papa } from &quot;ngx-papaparse&quot;;
+import { entityListSortingAccessor } from &quot;../../entity-components/entity-subrecord/entity-subrecord/sorting-accessor&quot;;
+import { ExportColumnConfig } from &quot;./export-column-config&quot;;
+import { QueryService } from &quot;../../../features/reporting/query.service&quot;;
+import moment from &quot;moment&quot;;
+
+/**
+ * Prepare data for export in csv format.
+ */
+@Injectable({
+  providedIn: &quot;root&quot;,
+})
+export class ExportService {
+  /** CSV row separator */
+  static readonly SEPARATOR_ROW &#x3D; &quot;\n&quot;;
+  /** CSV column/field separator */
+  static readonly SEPARATOR_COL &#x3D; &quot;,&quot;;
+
+  constructor(private papa: Papa, private queryService: QueryService) {}
+
+  /**
+   * Creates a JSON string of the given data.
+   *
+   * @param data the data which should be converted to JSON
+   * @returns string containing all the values stringified elements of the input data
+   */
+  createJson(data): string {
+    return JSON.stringify(data);
+  }
+
+  /**
+   * Creates a CSV string of the input data
+   *
+   * @param data an array of elements
+   * @param config (Optional) config specifying which fields should be exported
+   * @returns string a valid CSV string of the input data
+   */
+  async createCsv(
+    data: any[],
+    config: ExportColumnConfig[] &#x3D; this.generateExportConfigFromData(data)
+  ): Promise&lt;string&gt; {
+    const flattenedExportRows: ExportRow[] &#x3D; [];
+    for (const dataRow of data) {
+      const extendedExportableRows &#x3D; await this.generateExportRows(
+        dataRow,
+        config
+      );
+      flattenedExportRows.push(...extendedExportableRows);
+    }
+
+    // Apply entitySortingDataAccessor to transform values into human readable format
+    const readableExportRow &#x3D; flattenedExportRows.map((row) &#x3D;&gt; {
+      const readableRow &#x3D; {};
+      Object.keys(row).forEach((key) &#x3D;&gt; {
+        if (row[key] instanceof Date) {
+          // Export data according to local timezone offset
+          readableRow[key] &#x3D; moment(row[key]).toISOString(true);
+        } else {
+          readableRow[key] &#x3D; entityListSortingAccessor(row, key);
+        }
+      });
+      return readableRow;
+    });
+
+    return this.papa.unparse(
+      { data: readableExportRow },
+      { quotes: true, header: true, newline: ExportService.SEPARATOR_ROW }
+    );
+  }
+
+  /**
+   * Infer a column export config from the given data.
+   * Includes all properties of the data objects,
+   * if different objects are in the data a config for the superset across all objects&#x27; properties is returned.
+   *
+   * @param data objects to be exported, each object can have different properties
+   * @private
+   */
+  private generateExportConfigFromData(data: Object[]): ExportColumnConfig[] {
+    const uniqueKeys &#x3D; new Set&lt;string&gt;();
+    data.forEach((obj) &#x3D;&gt;
+      Object.keys(obj).forEach((key) &#x3D;&gt; uniqueKeys.add(key))
+    );
+
+    const columnConfigs: ExportColumnConfig[] &#x3D; [];
+    uniqueKeys.forEach((key) &#x3D;&gt; columnConfigs.push({ query: &quot;.&quot; + key }));
+
+    return columnConfigs;
+  }
+
+  /**
+   * Generate one or more export row objects from the given data object and config.
+   * @param object A single data object to be exported as one or more export row objects
+   * @param config
+   * @returns array of one or more export row objects (as simple {key: value})
+   * @private
+   */
+  private async generateExportRows(
+    object: Object,
+    config: ExportColumnConfig[]
+  ): Promise&lt;ExportRow[]&gt; {
+    let exportRows: ExportRow[] &#x3D; [{}];
+    for (const exportColumnConfig of config) {
+      const partialExportObjects: ExportRow[] &#x3D; await this.getExportRowsForColumn(
+        object,
+        exportColumnConfig
+      );
+
+      exportRows &#x3D; this.mergePartialExportRows(
+        exportRows,
+        partialExportObjects
+      );
+    }
+    return exportRows;
+  }
+
+  /**
+   * Generate one or more (partial) export row objects from a single property of the data object
+   * @param object
+   * @param exportColumnConfig
+   * @private
+   */
+  private async getExportRowsForColumn(
+    object: Object,
+    exportColumnConfig: ExportColumnConfig
+  ): Promise&lt;ExportRow[]&gt; {
+    const label &#x3D;
+      exportColumnConfig.label ?? exportColumnConfig.query.replace(&quot;.&quot;, &quot;&quot;);
+    const value &#x3D; await this.getValueForQuery(exportColumnConfig, object);
+
+    if (!exportColumnConfig.subQueries) {
+      const result &#x3D; {};
+      result[label] &#x3D; value;
+      return [result];
+    } else {
+      const additionalRows: ExportRow[] &#x3D; [];
+      for (const v of value) {
+        const addRows &#x3D; await this.generateExportRows(
+          v,
+          exportColumnConfig.subQueries
+        );
+        additionalRows.push(...addRows);
+      }
+      return additionalRows;
+    }
+  }
+
+  private async getValueForQuery(
+    exportColumnConfig: ExportColumnConfig,
+    object: Object
+  ): Promise&lt;any&gt; {
+    const value &#x3D; await this.queryService.queryData(
+      exportColumnConfig.query,
+      null,
+      null,
+      [object]
+    );
+
+    if (!exportColumnConfig.subQueries &amp;&amp; value.length &#x3D;&#x3D;&#x3D; 1) {
+      // queryData() always returns an array, simple queries should be a direct value however
+      return value[0];
+    }
+    return value;
+  }
+
+  /**
+   * Combine two arrays of export row objects.
+   * Every additional row is merge with every row of the first array (combining properties),
+   * resulting in n*m export rows.
+   *
+   * @param exportRows
+   * @param additionalExportRows
+   * @private
+   */
+  private mergePartialExportRows(
+    exportRows: ExportRow[],
+    additionalExportRows: ExportRow[]
+  ): ExportRow[] {
+    const rowsOfRows: ExportRow[][] &#x3D; additionalExportRows.map((addRow) &#x3D;&gt;
+      exportRows.map((row) &#x3D;&gt; Object.assign({}, row, addRow))
+    );
+    // return flattened array
+    return rowsOfRows.reduce((acc, rowOfRows) &#x3D;&gt; acc.concat(rowOfRows), []);
+  }
+}
+
+interface ExportRow {
+  [key: string]: any;
+}
+</code></pre>
+    </div>
+</div>
+
+
+                   
+
+
+
+
+                   </div><div class="search-results">
+    <div class="has-results">
+        <h1 class="search-results-title"><span class='search-results-count'></span> result-matching "<span class='search-query'></span>"</h1>
+        <ul class="search-results-list"></ul>
+    </div>
+    <div class="no-results">
+        <h1 class="search-results-title">No results matching "<span class='search-query'></span>"</h1>
+    </div>
+</div>
+</div>
+               <!-- END CONTENT -->
+           </div>
+       </div>
+
+       <script>
+            var COMPODOC_CURRENT_PAGE_DEPTH = 1;
+            var COMPODOC_CURRENT_PAGE_CONTEXT = 'interface';
+            var COMPODOC_CURRENT_PAGE_URL = 'ExportRow.html';
+            var MAX_SEARCH_RESULTS = 15;
+       </script>
+
+       <script src="../js/libs/custom-elements.min.js"></script>
+       <script src="../js/libs/lit-html.js"></script>
+       <!-- Required to polyfill modern browsers as code is ES5 for IE... -->
+       <script src="../js/libs/custom-elements-es5-adapter.js" charset="utf-8" defer></script>
+       <script src="../js/menu-wc.js" defer></script>
+
+       <script src="../js/libs/bootstrap-native.js"></script>
+
+       <script src="../js/libs/es6-shim.min.js"></script>
+       <script src="../js/libs/EventDispatcher.js"></script>
+       <script src="../js/libs/promise.min.js"></script>
+       <script src="../js/libs/zepto.min.js"></script>
+
+       <script src="../js/compodoc.js"></script>
+
+       <script src="../js/tabs.js"></script>
+       <script src="../js/menu.js"></script>
+       <script src="../js/libs/clipboard.min.js"></script>
+       <script src="../js/libs/prism.js"></script>
+       <script src="../js/sourceCode.js"></script>
+          <script src="../js/search/search.js"></script>
+          <script src="../js/search/lunr.min.js"></script>
+          <script src="../js/search/search-lunr.js"></script>
+          <script src="../js/search/search_index.js"></script>
+       <script src="../js/lazy-load-graphs.js"></script>
+
+
+    </body>
+</html>
